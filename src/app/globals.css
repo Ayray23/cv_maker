@@ -68,5 +68,5 @@
 .mini-resume.template-creative .mini-head i:first-child,.mini-resume.template-creative .mini-body i:nth-child(odd){background:#b45e4d}
 .mini-resume.template-timeline .mini-body i:nth-child(odd){background:#638c97}
 .mini-resume.template-compact{padding:7px 7px 5px}
-.template-compact .mini-body{gap:3px}
+.mini-resume.template-compact .mini-body{gap:3px}
 @media(max-width:640px){.template-modern .resume-header{margin:-30px -31px 0;padding:24px 31px 15px}}
