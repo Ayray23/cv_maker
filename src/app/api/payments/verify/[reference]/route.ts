@@ -18,7 +18,16 @@ export async function POST(_request: Request, { params }: { params: Promise<{ re
   if (payment.state === "succeeded") return NextResponse.json({ ok: true });
   const response = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`, { headers: { Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}` }, cache: "no-store" });
   const result = await response.json().catch(() => null) as { status?: boolean; data?: { status?: string; amount?: number; currency?: string; reference?: string } } | null;
-  if (!response.ok || !result?.status || result.data?.status !== "success" || result.data.reference !== reference) return NextResponse.json({ error: "Paystack has not confirmed this payment yet." }, { status: 402 });
+  if (!response.ok || !result?.status || !result.data || result.data.reference !== reference) {
+    return NextResponse.json({ error: "Paystack has not confirmed this payment yet." }, { status: 402 });
+  }
+  if (result.data.status === "failed" || result.data.status === "abandoned") {
+    await admin.from("payments").update({ state: "failed" }).eq("id", payment.id).eq("state", "pending");
+    return NextResponse.json({ error: "This payment was not completed. You can start checkout again." }, { status: 402 });
+  }
+  if (result.data.status !== "success") {
+    return NextResponse.json({ error: "Payment is still processing. Check again shortly." }, { status: 202 });
+  }
   const { data: recorded, error } = await admin.rpc("record_verified_paystack_payment", { p_reference: reference, p_amount_minor: result.data.amount, p_currency: result.data.currency });
   if (error || !["processed", "already_processed"].includes(recorded)) return NextResponse.json({ error: "Payment could not be confirmed against the expected price." }, { status: 409 });
   return NextResponse.json({ ok: true });
