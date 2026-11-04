@@ -31,7 +31,10 @@ function PaymentCallbackContent() {
     }
   }, [reference]);
 
-  useEffect(() => { void verifyPayment(); }, [verifyPayment]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => { void verifyPayment(); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [verifyPayment]);
 
   return (
     <main className="app-shell dashboard-page">
