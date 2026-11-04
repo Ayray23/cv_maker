@@ -26,7 +26,7 @@ export async function POST(request: Request) {
   const admin = createAdminClient();
   const normalizedDraft = normalizeCvDraft(parsed.data);
   const fingerprint = createHash("sha256").update(JSON.stringify({ draft: normalizedDraft, templateId: template.id, renderer: "cvforge-v1" })).digest("hex");
-  const { data: version, error: versionError } = await admin.from("resume_versions").upsert({ resume_id: resume.id, owner_id: user.id, content_fingerprint: fingerprint, template_id: template.id, renderer_version: "cvforge-v1", title_snapshot: resume.title || "CV", content_snapshot: normalizedDraft }, { onConflict: "owner_id,content_fingerprint" }).select("id").single();
+  const { data: version, error: versionError } = await admin.from("resume_versions").upsert({ resume_id: resume.id, owner_id: user.id, content_fingerprint: fingerprint, template_id: template.id, renderer_version: "cvforge-v1", title_snapshot: resume.title || "CV", content_snapshot: normalizedDraft }, { onConflict: "owner_id,content_fingerprint" }).select("id,title_snapshot").single();
   if (versionError || !version) return NextResponse.json({ error: "Could not prepare this CV version." }, { status: 500 });
   const { data: entitlement } = await admin.from("download_entitlements").select("id").eq("owner_id", user.id).eq("version_id", version.id).maybeSingle();
   if (!entitlement && template.special) return NextResponse.json({ error: "This template requires checkout.", paymentRequired: true }, { status: 402 });
@@ -52,7 +52,7 @@ export async function POST(request: Request) {
         if (claim === "payment_required") return NextResponse.json({ error: "Your two free standard downloads have been used.", paymentRequired: true }, { status: 402 });
         if (!(["granted", "existing"].includes(claim))) throw new Error("Could not authorize this download.");
       }
-      const filename = (resume.title || "CV").replace(/[^a-z0-9_-]+/gi, "-").replace(/^-|-$/g, "").slice(0, 80) || "CV";
+      const filename = (version.title_snapshot || "CV").replace(/[^a-z0-9_-]+/gi, "-").replace(/^-|-$/g, "").slice(0, 80) || "CV";
       return new NextResponse(new Uint8Array(pdf), { headers: { "Content-Type": "application/pdf", "Content-Disposition": `attachment; filename="${filename}.pdf"`, "Cache-Control": "private, no-store" } });
     } finally { await browser.close(); }
   } catch (error) {
