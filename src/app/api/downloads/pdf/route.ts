@@ -24,8 +24,9 @@ export async function POST(request: Request) {
   const template = cvTemplates.find((item) => item.id === resume.selected_template_id);
   if (!template) return NextResponse.json({ error: "Unknown CV template." }, { status: 400 });
   const admin = createAdminClient();
-  const fingerprint = createHash("sha256").update(JSON.stringify({ draft: normalizeCvDraft(parsed.data), templateId: template.id, renderer: "cvforge-v1" })).digest("hex");
-  const { data: version, error: versionError } = await admin.from("resume_versions").upsert({ resume_id: resume.id, owner_id: user.id, content_fingerprint: fingerprint, template_id: template.id, renderer_version: "cvforge-v1" }, { onConflict: "owner_id,content_fingerprint" }).select("id").single();
+  const normalizedDraft = normalizeCvDraft(parsed.data);
+  const fingerprint = createHash("sha256").update(JSON.stringify({ draft: normalizedDraft, templateId: template.id, renderer: "cvforge-v1" })).digest("hex");
+  const { data: version, error: versionError } = await admin.from("resume_versions").upsert({ resume_id: resume.id, owner_id: user.id, content_fingerprint: fingerprint, template_id: template.id, renderer_version: "cvforge-v1", title_snapshot: resume.title || "CV", content_snapshot: normalizedDraft }, { onConflict: "owner_id,content_fingerprint" }).select("id").single();
   if (versionError || !version) return NextResponse.json({ error: "Could not prepare this CV version." }, { status: 500 });
   const { data: entitlement } = await admin.from("download_entitlements").select("id").eq("owner_id", user.id).eq("version_id", version.id).maybeSingle();
   if (!entitlement && template.special) return NextResponse.json({ error: "This template requires checkout.", paymentRequired: true }, { status: 402 });
@@ -41,7 +42,7 @@ export async function POST(request: Request) {
       const baseUrl = process.env.APP_BASE_URL || new URL(request.url).origin;
       const cookieStore = await cookies();
       await page.setCookie(...cookieStore.getAll().map(({ name, value }) => ({ name, value, url: baseUrl })));
-      await page.goto(`${baseUrl}/print/${resume.id}`, { waitUntil: "networkidle0", timeout: 30000 });
+      await page.goto(`${baseUrl}/print/version/${version.id}`, { waitUntil: "networkidle0", timeout: 30000 });
       await page.emulateMediaType("print");
       const pdf = await page.pdf({ format: "A4", printBackground: true, preferCSSPageSize: true, margin: { top: "0", right: "0", bottom: "0", left: "0" } });
       if (pdf.byteLength < 1500) throw new Error("PDF rendering returned an empty document.");
