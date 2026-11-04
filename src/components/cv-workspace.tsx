@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AppHeader } from "@/components/layout/app-header";
 import { WorkspaceSidebar } from "@/components/layout/workspace-sidebar";
 import { CvEditor } from "@/components/editor/cv-editor";
@@ -21,6 +21,9 @@ export function CvWorkspace({ initialDocument }: { initialDocument?: CvDocument 
   const [cloudReady, setCloudReady] = useState(Boolean(initialDocument));
   const [cloudEnabled, setCloudEnabled] = useState(Boolean(initialDocument));
   const [saveStatus, setSaveStatus] = useState("Saved on this device");
+  // Serialize cloud writes so a slower, older autosave can never overwrite a newer draft.
+  const syncQueue = useRef<Promise<void>>(Promise.resolve());
+  const saveRevision = useRef(0);
   const activeDocument = documents.find((document) => document.id === activeId) ?? documents[0];
   const initials = useMemo(() => (activeDocument?.draft.fullName ?? "").split(" ").map((part) => part[0]).slice(0, 2).join("").toUpperCase(), [activeDocument?.draft.fullName]);
 
@@ -67,21 +70,41 @@ export function CvWorkspace({ initialDocument }: { initialDocument?: CvDocument 
 
   useEffect(() => {
     if (!loaded || !cloudReady) return;
-    const timer = window.setTimeout(async () => {
+    const revision = ++saveRevision.current;
+    const timer = window.setTimeout(() => {
       try {
         if (!initialDocument) localStorage.setItem(STORAGE_KEY, JSON.stringify({ documents, activeId }));
-        if (cloudEnabled) {
-          const response = await fetch("/api/resumes", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ resumes: documents }) });
-          if (!response.ok) throw new Error("Cloud sync failed");
-          setSaveStatus("Synced to your account");
-        } else {
-          setSaveStatus("Saved on this device");
-        }
       } catch {
-        setSaveStatus(cloudEnabled ? "Saved locally · cloud sync failed" : "Could not save on this device");
+        setSaveStatus("Could not save on this device");
+        return;
       }
-    }, 300);
-    return () => window.clearTimeout(timer);
+
+      if (!cloudEnabled) {
+        setSaveStatus("Saved on this device");
+        return;
+      }
+
+      setSaveStatus("Saving to your account…");
+      const snapshot = JSON.stringify({ resumes: documents });
+      syncQueue.current = syncQueue.current
+        .catch(() => undefined)
+        .then(async () => {
+          const response = await fetch("/api/resumes", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: snapshot,
+          });
+          if (!response.ok) throw new Error("Cloud sync failed");
+          if (saveRevision.current === revision) setSaveStatus("Synced to your account");
+        })
+        .catch(() => {
+          if (saveRevision.current === revision) setSaveStatus("Saved locally · cloud sync failed");
+        });
+    }, 400);
+    return () => {
+      window.clearTimeout(timer);
+      if (saveRevision.current === revision) saveRevision.current += 1;
+    };
   }, [documents, activeId, loaded, cloudReady, cloudEnabled, initialDocument]);
 
   function updateDraft(draft: CvDocument["draft"]) {
@@ -115,7 +138,7 @@ export function CvWorkspace({ initialDocument }: { initialDocument?: CvDocument 
     <main className={dark ? "app-shell dark-mode" : "app-shell"}>
       <AppHeader initials={initials} dark={dark} mobileOpen={mobileOpen} onToggleTheme={() => setDark(!dark)} onToggleNav={() => setMobileOpen(!mobileOpen)} />
       <div className="workspace">
-      <WorkspaceSidebar initials={initials} documents={documents} activeId={activeDocument.id} onSelect={setActiveId} onCreate={createDocument} onDelete={deleteDocument} />
+        <WorkspaceSidebar initials={initials} documents={documents} activeId={activeDocument.id} onSelect={setActiveId} onCreate={createDocument} onDelete={deleteDocument} />
         <CvEditor key={activeDocument.id} document={activeDocument} saveStatus={saveStatus} onDraftChange={updateDraft} onTitleChange={renameDocument} onTemplateChange={(templateId) => setDocuments((current) => current.map((document) => document.id === activeDocument.id ? { ...document, templateId } : document))} />
       </div>
       <footer className="mobile-legal">Drafts are saved in this browser. Cloud accounts and paid checkout are not connected.</footer>
