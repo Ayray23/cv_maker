@@ -1,6 +1,10 @@
 # CVForge
 
-A structured CV builder built with Next.js 16, React, TypeScript, and Supabase. The editor supports multiple CVs, editable/reorderable sections, four templates, account-backed storage, server-generated A4 PDFs, and Paystack checkout.
+A structured CV builder built with Next.js 16, React, TypeScript, and Supabase. The editor supports multiple CVs, editable/reorderable sections, twelve original templates, account-backed storage, server-generated A4 PDFs, and Paystack checkout.
+
+## Template library
+
+CVForge includes twelve original, editable layouts across ATS-first, modern, and creative styles: Essential, Editorial, Classic, Tech, Graduate, Modern, Monogram, Atelier, Executive, Creative, Timeline, and Compact. Six are free to use; six are premium. These designs take broad inspiration from common resume-builder patterns (including Canva, FlowCV, Novorésumé, and Enhancv) but are implemented as original CVForge components rather than copied third-party template files. ATS-labelled layouts prioritize selectable text, conventional headings, and a straightforward reading order; always follow the employer's file-format instructions.
 
 ## Requirements
 
