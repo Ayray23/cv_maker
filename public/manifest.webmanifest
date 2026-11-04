@@ -1,0 +1,10 @@
+{
+  "name": "CVForge — Shape your next chapter",
+  "short_name": "CVForge",
+  "description": "Create a polished CV with clear, upfront pricing.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8f8f5",
+  "theme_color": "#f8f8f5",
+  "icons": []
+}
