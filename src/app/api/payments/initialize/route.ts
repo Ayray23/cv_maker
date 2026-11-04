@@ -29,6 +29,19 @@ export async function POST(request: Request) {
   const { data: existingEntitlement, error: entitlementError } = await admin.from("download_entitlements").select("id").eq("owner_id", user.id).eq("version_id", version.id).maybeSingle();
   if (entitlementError) return NextResponse.json({ error: "Could not check this CV version's download access." }, { status: 500 });
   if (existingEntitlement) return NextResponse.json({ error: "This CV version is already available to download." }, { status: 409 });
+
+  const { data: pendingPayment, error: pendingError } = await admin
+    .from("payments")
+    .select("checkout_url")
+    .eq("owner_id", user.id)
+    .eq("version_id", version.id)
+    .eq("state", "pending")
+    .maybeSingle();
+  if (pendingError) return NextResponse.json({ error: "Could not check an existing checkout." }, { status: 500 });
+  if (pendingPayment) {
+    if (pendingPayment.checkout_url) return NextResponse.json({ authorizationUrl: pendingPayment.checkout_url, reused: true });
+    return NextResponse.json({ error: "Checkout is already being initialized. Please retry in a few seconds." }, { status: 409 });
+  }
   if (!template.special) {
     const { data: freeEntitlements, error: allowanceError } = await admin.from("download_entitlements").select("id").eq("owner_id", user.id).eq("source", "free");
     if (allowanceError) return NextResponse.json({ error: "Could not check your free download allowance." }, { status: 500 });
@@ -36,7 +49,11 @@ export async function POST(request: Request) {
   }
   const reference = `cvf_${randomUUID().replaceAll("-", "")}`;
   const { data: payment, error: paymentError } = await admin.from("payments").insert({ owner_id: user.id, version_id: version.id, provider: "paystack", provider_reference: reference, amount_minor: 200000, currency: "NGN" }).select("id").single();
-  if (paymentError || !payment) return NextResponse.json({ error: "Could not start checkout." }, { status: 500 });
+  if (paymentError || !payment) {
+    const { data: concurrentPayment } = await admin.from("payments").select("checkout_url").eq("owner_id", user.id).eq("version_id", version.id).eq("state", "pending").maybeSingle();
+    if (concurrentPayment?.checkout_url) return NextResponse.json({ authorizationUrl: concurrentPayment.checkout_url, reused: true });
+    return NextResponse.json({ error: "A checkout is already being initialized. Please retry shortly." }, { status: 409 });
+  }
   const origin = process.env.APP_BASE_URL || new URL(request.url).origin;
   const callback = process.env.PAYSTACK_CALLBACK_URL || `${origin}/payment/callback`;
   const response = await fetch("https://api.paystack.co/transaction/initialize", { method: "POST", headers: { Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`, "Content-Type": "application/json" }, body: JSON.stringify({ email: user.email, amount: 200000, currency: "NGN", reference, callback_url: callback, metadata: { payment_id: payment.id, version_id: version.id } }), cache: "no-store" });
@@ -45,5 +62,12 @@ export async function POST(request: Request) {
     await admin.from("payments").update({ state: "failed" }).eq("id", payment.id);
     return NextResponse.json({ error: "Paystack could not start checkout. Please try again." }, { status: 502 });
   }
-  return NextResponse.json({ authorizationUrl: result.data.authorization_url });
+  const checkoutUrl = result.data.authorization_url;
+  if (!checkoutUrl.startsWith("https://checkout.paystack.com/")) {
+    await admin.from("payments").update({ state: "failed" }).eq("id", payment.id);
+    return NextResponse.json({ error: "Paystack returned an invalid checkout URL." }, { status: 502 });
+  }
+  const { error: saveUrlError } = await admin.from("payments").update({ checkout_url: checkoutUrl }).eq("id", payment.id).eq("state", "pending");
+  if (saveUrlError) return NextResponse.json({ error: "Checkout was created but could not be saved. Retry to recover it safely." }, { status: 503 });
+  return NextResponse.json({ authorizationUrl: checkoutUrl });
 }
