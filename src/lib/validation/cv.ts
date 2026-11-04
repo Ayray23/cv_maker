@@ -22,7 +22,7 @@ export const cvDraftSchema = z.object({
 export const resumeSchema = z.object({
   id: z.string().uuid(),
   title: z.string().trim().min(1).max(120),
-  templateId: z.enum(["essential", "editorial", "monogram", "atelier"]),
+  templateId: z.enum(["essential", "editorial", "monogram", "atelier", "classic", "tech", "graduate", "modern", "executive", "creative", "timeline", "compact"]),
   draft: cvDraftSchema,
 }).strict();
 
