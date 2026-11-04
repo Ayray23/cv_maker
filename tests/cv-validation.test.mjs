@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { cvDraftSchema, resumeSchema, resumeSyncSchema } from "../src/lib/validation/cv.ts";
+import { cvTemplates } from "../src/lib/cv.ts";
 
 const validDraft = {
   fullName: "Ada Example",
@@ -90,4 +91,18 @@ test("validates resume sync envelope and its maximum batch size", () => {
   assert.equal(resumeSyncSchema.safeParse({ resumes: [resume] }).success, true);
   assert.equal(resumeSyncSchema.safeParse({ resumes: Array(101).fill(resume) }).success, false);
   assert.equal(resumeSyncSchema.safeParse({ resumes: [], unexpected: true }).success, false);
+});
+
+
+test("accepts every registered CVForge template in saved resume documents", () => {
+  const base = {
+    id: "00000000-0000-4000-8000-000000000010",
+    title: "My CV",
+    draft: validDraft,
+  };
+  assert.equal(cvTemplates.length, 12);
+  for (const template of cvTemplates) {
+    assert.equal(resumeSchema.safeParse({ ...base, templateId: template.id }).success, true);
+  }
+  assert.equal(new Set(cvTemplates.map((template) => template.id)).size, cvTemplates.length);
 });
