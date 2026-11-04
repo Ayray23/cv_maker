@@ -68,6 +68,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Paystack returned an invalid checkout URL." }, { status: 502 });
   }
   const { error: saveUrlError } = await admin.from("payments").update({ checkout_url: checkoutUrl }).eq("id", payment.id).eq("state", "pending");
-  if (saveUrlError) return NextResponse.json({ error: "Checkout was created but could not be saved. Retry to recover it safely." }, { status: 503 });
+  if (saveUrlError) {
+    await admin.from("payments").update({ state: "failed" }).eq("id", payment.id).eq("state", "pending");
+    return NextResponse.json({ error: "Checkout could not be saved. Please start a new checkout." }, { status: 503 });
+  }
   return NextResponse.json({ authorizationUrl: checkoutUrl });
 }
