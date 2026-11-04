@@ -14,7 +14,7 @@ A structured CV builder built with Next.js 16, React, TypeScript, and Supabase. 
 1. Install packages with `npm install`.
 2. Copy `.env.example` to `.env.local` and set `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, and `SUPABASE_SECRET_KEY` from the same Supabase project. The secret key is server-only and must never use a `NEXT_PUBLIC_` prefix.
 3. Set `CHROME_EXECUTABLE_PATH` to the installed Chrome/Edge executable. Leave `APP_BASE_URL=http://localhost:3000` for local use.
-4. Apply `supabase/migrations/202611040001_initial_schema.sql` to that project using the Supabase SQL editor or CLI.
+4. Apply every SQL migration in `supabase/migrations/` in filename order. This includes the initial schema, immutable CV version snapshots, and checkout reliability changes. Use the Supabase SQL editor or CLI, and confirm all three migrations complete successfully.
 5. In Supabase Auth, enable email/password and Google OAuth, set the site URL to `http://localhost:3000`, and add `http://localhost:3000/auth/callback` as an allowed redirect URL. Configure production URLs before deployment.
 6. Add the Paystack test secret key to `PAYSTACK_SECRET_KEY`. Set the Paystack callback URL to `http://localhost:3000/payment/callback`. For local webhook testing, expose `/api/payments/webhook` through a trusted HTTPS tunnel and configure that URL in Paystack.
 7. Run `npm run dev` and open `http://localhost:3000`.
@@ -29,7 +29,7 @@ With Supabase values absent, the public editor keeps drafts in local browser sto
 - Re-downloading a version that already has an entitlement is free.
 - Payment is granted only after Paystack verification. A signed webhook and the callback verifier are idempotent.
 
-## PDF deployment
+## Security and privacy notes\n\n- Baseline security response headers are configured in `next.config.ts`; review them against the final hosting environment before launch.\n- `robots.ts` excludes account, editor, payment, print, reset-password, and API routes from search indexing. This is not an access-control mechanism; authentication and Supabase RLS remain authoritative.\n- Do not enable real payments until the Stage 5 checkout changes and all database migrations have been verified in a Paystack test environment.\n- Account-wide deletion, privacy notice, statutory payment-record retention, and the free-trial abuse-retention policy still require an explicit product/legal decision before public launch.\n\n## PDF deployment
 
 PDFs are rendered by headless Chromium against the authenticated `/print/[id]` page so the server uses the same resume component and CSS as the live preview. Local development uses `CHROME_EXECUTABLE_PATH`; serverless deployments use `@sparticuz/chromium`. Choose a Node.js deployment target with sufficient memory and execution time for Chromium. `APP_BASE_URL` must be the public canonical origin in production.
 
