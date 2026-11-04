@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseAdminConfigured, isSupabaseConfigured } from "@/lib/supabase/config";
 import { cvDraftSchema } from "@/lib/validation/cv";
-import { cvTemplates } from "@/lib/cv";
+import { cvTemplates, normalizeCvDraft } from "@/lib/cv";
 
 export const runtime = "nodejs";
 
@@ -21,9 +21,10 @@ export async function POST(request: Request) {
   if (!parsed.success) return NextResponse.json({ error: "Fix invalid CV content before checkout." }, { status: 400 });
   const template = cvTemplates.find((item) => item.id === resume.selected_template_id);
   if (!template) return NextResponse.json({ error: "Unknown CV template." }, { status: 400 });
-  const fingerprint = createHash("sha256").update(JSON.stringify({ draft: parsed.data, templateId: template.id, renderer: "cvforge-v1" })).digest("hex");
+  const normalizedDraft = normalizeCvDraft(parsed.data);
+  const fingerprint = createHash("sha256").update(JSON.stringify({ draft: normalizedDraft, templateId: template.id, renderer: "cvforge-v1" })).digest("hex");
   const admin = createAdminClient();
-  const { data: version, error: versionError } = await admin.from("resume_versions").upsert({ resume_id: resume.id, owner_id: user.id, content_fingerprint: fingerprint, template_id: template.id, renderer_version: "cvforge-v1" }, { onConflict: "owner_id,content_fingerprint" }).select("id").single();
+  const { data: version, error: versionError } = await admin.from("resume_versions").upsert({ resume_id: resume.id, owner_id: user.id, content_fingerprint: fingerprint, template_id: template.id, renderer_version: "cvforge-v1", title_snapshot: resume.title || "CV", content_snapshot: normalizedDraft }, { onConflict: "owner_id,content_fingerprint" }).select("id").single();
   if (versionError || !version) return NextResponse.json({ error: "Could not prepare this CV version." }, { status: 500 });
   const { data: existingEntitlement, error: entitlementError } = await admin.from("download_entitlements").select("id").eq("owner_id", user.id).eq("version_id", version.id).maybeSingle();
   if (entitlementError) return NextResponse.json({ error: "Could not check this CV version's download access." }, { status: 500 });
