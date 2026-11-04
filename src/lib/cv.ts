@@ -4,6 +4,7 @@ export type CvTemplate = {
   style: string;
   special: boolean;
   description: string;
+  category: "ATS" | "Modern" | "Creative";
 };
 
 export type CvDraft = {
@@ -38,10 +39,18 @@ export type CvDocument = {
 };
 
 export const cvTemplates: CvTemplate[] = [
-  { id: "essential", name: "Essential", style: "template-essential", special: false, description: "Clean & simple" },
-  { id: "editorial", name: "Editorial", style: "template-editorial", special: false, description: "Modern classic" },
-  { id: "monogram", name: "Monogram", style: "template-monogram", special: true, description: "A personal touch" },
-  { id: "atelier", name: "Atelier", style: "template-atelier", special: true, description: "Distinctly yours" },
+  { id: "essential", name: "Essential", style: "template-essential", special: false, description: "Clean & simple", category: "ATS" },
+  { id: "editorial", name: "Editorial", style: "template-editorial", special: false, description: "Modern classic", category: "Modern" },
+  { id: "monogram", name: "Monogram", style: "template-monogram", special: true, description: "A personal touch", category: "Creative" },
+  { id: "atelier", name: "Atelier", style: "template-atelier", special: true, description: "Distinctly yours", category: "Creative" },
+  { id: "classic", name: "Classic", style: "template-classic", special: false, description: "Traditional & ATS-first", category: "ATS" },
+  { id: "tech", name: "Tech", style: "template-tech", special: false, description: "Skills-led for tech roles", category: "Modern" },
+  { id: "graduate", name: "Graduate", style: "template-graduate", special: false, description: "For students & first jobs", category: "ATS" },
+  { id: "modern", name: "Modern", style: "template-modern", special: false, description: "Fresh professional layout", category: "Modern" },
+  { id: "executive", name: "Executive", style: "template-executive", special: true, description: "Polished leadership profile", category: "Creative" },
+  { id: "creative", name: "Creative", style: "template-creative", special: true, description: "Expressive portfolio style", category: "Creative" },
+  { id: "timeline", name: "Timeline", style: "template-timeline", special: true, description: "Career progression focus", category: "Modern" },
+  { id: "compact", name: "Compact", style: "template-compact", special: true, description: "Space-efficient layout", category: "ATS" },
 ];
 
 export const initialCvDraft: CvDraft = {
