@@ -1,8 +1,9 @@
 {
-  "name": "CVForge — Shape your next chapter",
+  "name": "CVForge — Create a CV that moves you forward",
   "short_name": "CVForge",
-  "description": "Build, edit and preview a professional CV. Save drafts and export polished PDFs.",
+  "description": "Build, edit and preview a professional CV. Save securely and export polished PDFs.",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#f8f8f5",
   "theme_color": "#427b61",
@@ -11,7 +12,7 @@
       "src": "/icons/cvforge-icon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
-      "purpose": "any"
+      "purpose": "any maskable"
     }
   ]
 }
