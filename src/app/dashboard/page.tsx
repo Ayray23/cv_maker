@@ -18,7 +18,7 @@ export default async function DashboardPage() {
 
   return (
     <main className="app-shell dashboard-page">
-      <header className="dashboard-header"><Link className="brand" href="/">cvforge<span className="brand-dot">.</span></Link><div><span>{user.email}</span><SignOutButton /></div></header>
+      <header className="dashboard-header"><Link className="brand" href="/">cvforge<span className="brand-dot">.</span></Link><div><span>{user.email}</span><Link href="/payments">Payment history</Link><SignOutButton /></div></header>
       <section className="dashboard-content">
         <div className="dashboard-title"><div><span className="section-kicker">YOUR WORKSPACE</span><h1>Your CVs</h1><p>Create and manage your CV documents.</p></div><CreateCvButton /></div>
         {error ? <p className="notice" role="alert">Could not load your CVs. Refresh the page to try again.</p> : resumes?.length ? <div className="dashboard-documents">{resumes.map((resume) => <Link className="dashboard-document" href={`/editor/${resume.id}`} key={resume.id}><span className="dashboard-document-icon"><FileText size={20} /></span><span><strong>{resume.title}</strong><small>Edited {resume.updated_at.slice(0, 10)} · {resume.selected_template_id}</small></span></Link>)}</div> : <div className="dashboard-empty"><h2>Your CV workspace is ready</h2><p>Create a CV to get started. Your documents will be private to your account.</p><CreateCvButton /></div>}
