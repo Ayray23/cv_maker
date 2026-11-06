@@ -147,3 +147,16 @@ test("rejects invalid timestamps and duplicate IDs in local draft cache", () => 
   const validResume = { ...resume, updatedAt: "2026-11-06T09:30:00.000Z" };
   assert.equal(localWorkspaceSchema.safeParse({ documents: [validResume, validResume], activeId: validResume.id }).success, false);
 });
+
+
+test("accepts the updatedAt field emitted by the CV workspace during sync", () => {
+  const resume = {
+    id: "00000000-0000-4000-8000-000000000010",
+    title: "My CV",
+    templateId: "essential",
+    draft: validDraft,
+    updatedAt: "2026-11-06T09:30:00.000Z",
+  };
+
+  assert.equal(resumeSyncSchema.safeParse({ resumes: [resume] }).success, true);
+});
