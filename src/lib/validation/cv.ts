@@ -24,6 +24,7 @@ export const resumeSchema = z.object({
   title: z.string().trim().min(1).max(120),
   templateId: z.enum(["essential", "editorial", "monogram", "atelier", "classic", "tech", "graduate", "modern", "executive", "creative", "timeline", "compact"]),
   draft: cvDraftSchema,
+  updatedAt: z.string().datetime().optional(),
 }).strict();
 
 export const resumeSyncSchema = z.object({
