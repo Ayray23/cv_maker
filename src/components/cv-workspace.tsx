@@ -41,7 +41,7 @@ function readWorkspaceCache(key: string) {
   }
 }
 
-export function CvWorkspace({ initialDocument }: { initialDocument?: CvDocument }) {
+export function CvWorkspace({ initialDocument, ownerId: initialOwnerId }: { initialDocument?: CvDocument; ownerId?: string }) {
   const [dark, setDark] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [documents, setDocuments] = useState<CvDocument[]>(() => [initialDocument ?? newDocument()]);
@@ -49,7 +49,7 @@ export function CvWorkspace({ initialDocument }: { initialDocument?: CvDocument 
   const [loaded, setLoaded] = useState(Boolean(initialDocument));
   const [cloudReady, setCloudReady] = useState(Boolean(initialDocument));
   const [cloudEnabled, setCloudEnabled] = useState(Boolean(initialDocument));
-  const [ownerId, setOwnerId] = useState<string | null>(null);
+  const [ownerId, setOwnerId] = useState<string | null>(initialOwnerId ?? null);
   const [cloudState, setCloudState] = useState<CloudState>(initialDocument ? "ready" : "checking");
   const [saveStatus, setSaveStatus] = useState(initialDocument ? "Synced to your account" : "Saved on this device");
   const [deleting, setDeleting] = useState(false);
