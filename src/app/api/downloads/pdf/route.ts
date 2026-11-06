@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseAdminConfigured, isSupabaseConfigured } from "@/lib/supabase/config";
 import { cvTemplates, normalizeCvDraft } from "@/lib/cv";
 import { cvDraftSchema } from "@/lib/validation/cv";
+import { getOrCreateResumeVersion } from "@/lib/server/resume-version";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -25,8 +26,9 @@ export async function POST(request: Request) {
   if (!template) return NextResponse.json({ error: "Unknown CV template." }, { status: 400 });
   const admin = createAdminClient();
   const normalizedDraft = normalizeCvDraft(parsed.data);
-  const fingerprint = createHash("sha256").update(JSON.stringify({ draft: normalizedDraft, templateId: template.id, renderer: "cvforge-v1" })).digest("hex");
-  const { data: version, error: versionError } = await admin.from("resume_versions").upsert({ resume_id: resume.id, owner_id: user.id, content_fingerprint: fingerprint, template_id: template.id, renderer_version: "cvforge-v1", title_snapshot: resume.title || "CV", content_snapshot: normalizedDraft }, { onConflict: "owner_id,content_fingerprint" }).select("id,title_snapshot").single();
+  const snapshotTitle = resume.title || "CV";
+  const fingerprint = createHash("sha256").update(JSON.stringify({ resumeId: resume.id, title: snapshotTitle, draft: normalizedDraft, templateId: template.id, renderer: "cvforge-v1" })).digest("hex");
+  const { version, error: versionError } = await getOrCreateResumeVersion(admin, { resume_id: resume.id, owner_id: user.id, content_fingerprint: fingerprint, template_id: template.id, renderer_version: "cvforge-v1", title_snapshot: snapshotTitle, content_snapshot: normalizedDraft });
   if (versionError || !version) return NextResponse.json({ error: "Could not prepare this CV version." }, { status: 500 });
   const { data: entitlement } = await admin.from("download_entitlements").select("id").eq("owner_id", user.id).eq("version_id", version.id).maybeSingle();
   if (!entitlement && template.special) return NextResponse.json({ error: "This template requires checkout.", paymentRequired: true }, { status: 402 });
