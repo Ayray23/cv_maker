@@ -26,4 +26,27 @@ export const resumeSchema = z.object({
   draft: cvDraftSchema,
 }).strict();
 
-export const resumeSyncSchema = z.object({ resumes: z.array(resumeSchema).max(100) }).strict();
+export const resumeSyncSchema = z.object({
+  resumes: z.array(resumeSchema).max(100),
+}).strict().superRefine(({ resumes }, context) => {
+  const seen = new Set<string>();
+  resumes.forEach((resume, index) => {
+    if (seen.has(resume.id)) {
+      context.addIssue({ code: "custom", path: ["resumes", index, "id"], message: "A CV can only appear once in a sync request." });
+    }
+    seen.add(resume.id);
+  });
+});
+
+export const localWorkspaceSchema = z.object({
+  documents: z.array(resumeSchema.extend({ updatedAt: z.string().datetime() })).min(1).max(100),
+  activeId: z.string().uuid(),
+}).strict().superRefine(({ documents, activeId }, context) => {
+  const ids = new Set(documents.map((document) => document.id));
+  if (!ids.has(activeId)) {
+    context.addIssue({ code: "custom", path: ["activeId"], message: "The active CV must exist in the saved documents." });
+  }
+  if (ids.size !== documents.length) {
+    context.addIssue({ code: "custom", path: ["documents"], message: "Saved CV identifiers must be unique." });
+  }
+});
