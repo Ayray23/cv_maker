@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { cvDraftSchema, resumeSchema, resumeSyncSchema } from "../src/lib/validation/cv.ts";
+import { cvDraftSchema, localWorkspaceSchema, resumeSchema, resumeSyncSchema } from "../src/lib/validation/cv.ts";
 import { cvTemplates } from "../src/lib/cv.ts";
 
 const validDraft = {
@@ -105,4 +105,45 @@ test("accepts every registered CVForge template in saved resume documents", () =
     assert.equal(resumeSchema.safeParse({ ...base, templateId: template.id }).success, true);
   }
   assert.equal(new Set(cvTemplates.map((template) => template.id)).size, cvTemplates.length);
+});
+
+
+test("rejects duplicate CV IDs in a single sync batch", () => {
+  const resume = {
+    id: "00000000-0000-4000-8000-000000000010",
+    title: "My CV",
+    templateId: "essential",
+    draft: validDraft,
+  };
+
+  assert.equal(resumeSyncSchema.safeParse({ resumes: [resume, resume] }).success, false);
+});
+
+test("validates browser draft cache and requires the active CV to exist", () => {
+  const resume = {
+    id: "00000000-0000-4000-8000-000000000010",
+    title: "My CV",
+    templateId: "essential",
+    draft: validDraft,
+    updatedAt: "2026-11-06T09:30:00.000Z",
+  };
+  const validCache = { documents: [resume], activeId: resume.id };
+
+  assert.equal(localWorkspaceSchema.safeParse(validCache).success, true);
+  assert.equal(localWorkspaceSchema.safeParse({ ...validCache, activeId: "00000000-0000-4000-8000-000000000011" }).success, false);
+  assert.equal(localWorkspaceSchema.safeParse({ ...validCache, documents: [{ ...resume, extra: true }] }).success, false);
+});
+
+test("rejects invalid timestamps and duplicate IDs in local draft cache", () => {
+  const resume = {
+    id: "00000000-0000-4000-8000-000000000010",
+    title: "My CV",
+    templateId: "essential",
+    draft: validDraft,
+    updatedAt: "not-a-date",
+  };
+
+  assert.equal(localWorkspaceSchema.safeParse({ documents: [resume], activeId: resume.id }).success, false);
+  const validResume = { ...resume, updatedAt: "2026-11-06T09:30:00.000Z" };
+  assert.equal(localWorkspaceSchema.safeParse({ documents: [validResume, validResume], activeId: validResume.id }).success, false);
 });
