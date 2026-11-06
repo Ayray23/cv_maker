@@ -1,14 +1,12 @@
 "use client";
-
 import { useState } from "react";
 import { ArrowRight, BadgeCheck, Check, Download, Eye } from "lucide-react";
 import { CvDocument, CvDraft, cvTemplates } from "@/lib/cv";
 import { CvDetailsForm } from "@/components/editor/cv-details-form";
 import { ResumePreview } from "@/components/editor/resume-preview";
 import { TemplatePicker } from "@/components/editor/template-picker";
-
+import { PricingSection } from "@/components/pricing-section";
 type Props = { document: CvDocument; saveStatus: string; onDraftChange: (draft: CvDraft) => void; onTitleChange: (title: string) => void; onTemplateChange: (templateId: string) => void };
-
 export function CvEditor({ document, saveStatus, onDraftChange, onTitleChange, onTemplateChange }: Props) {
   const { draft } = document;
   const [selectedId, setSelectedId] = useState(document.templateId);
@@ -16,11 +14,9 @@ export function CvEditor({ document, saveStatus, onDraftChange, onTitleChange, o
   const [previewVisible, setPreviewVisible] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const selectedTemplate = cvTemplates.find((template) => template.id === selectedId) ?? cvTemplates[0];
-
   async function handleDownload() {
     if (downloading) return;
-    setDownloading(true);
-    setNotice("");
+    setDownloading(true); setNotice("");
     try {
       const sync = await fetch("/api/resumes", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ resumes: [document] }) });
       if (!sync.ok) throw new Error(sync.status === 401 || sync.status === 503 ? "Sign in and configure Supabase cloud storage before downloading." : "Save this CV before downloading.");
@@ -29,25 +25,14 @@ export function CvEditor({ document, saveStatus, onDraftChange, onTitleChange, o
         const checkout = await fetch("/api/payments/initialize", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ resumeId: document.id }) });
         const checkoutResult = await checkout.json() as { error?: string; authorizationUrl?: string };
         if (!checkout.ok || !checkoutResult.authorizationUrl) throw new Error(checkoutResult.error || "Checkout could not start.");
-        window.location.assign(checkoutResult.authorizationUrl);
-        return;
+        window.location.assign(checkoutResult.authorizationUrl); return;
       }
-      if (!response.ok) {
-        const result = await response.json() as { error?: string };
-        throw new Error(result.error || "PDF could not be generated.");
-      }
-      const blob = await response.blob();
-      const href = URL.createObjectURL(blob);
-      const link = window.document.createElement("a");
-      link.href = href;
-      link.download = `${(document.title || "CV").replace(/[^a-z0-9_-]+/gi, "-")}.pdf`;
-      link.click();
-      URL.revokeObjectURL(href);
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Download could not be completed.");
-    } finally { setDownloading(false); }
+      if (!response.ok) { const result = await response.json() as { error?: string }; throw new Error(result.error || "PDF could not be generated."); }
+      const blob = await response.blob(); const href = URL.createObjectURL(blob); const link = window.document.createElement("a");
+      link.href = href; link.download = `${(document.title || "CV").replace(/[^a-z0-9_-]+/gi, "-")}.pdf`; link.click(); URL.revokeObjectURL(href);
+    } catch (error) { setNotice(error instanceof Error ? error.message : "Download could not be completed."); }
+    finally { setDownloading(false); }
   }
-
   return (
     <section className="main-panel" id="editor">
       <div className="page-heading"><div><div className="eyebrow"><span>MY DOCUMENTS</span><span className="crumb-slash">/</span><span>{document.title || "UNTITLED CV"}</span></div><div className="title-line"><input className="document-title-input" aria-label="CV title" value={document.title} onChange={(event) => onTitleChange(event.target.value)} /><span className="saved-label"><span /> {saveStatus}</span></div></div></div>
@@ -61,6 +46,7 @@ export function CvEditor({ document, saveStatus, onDraftChange, onTitleChange, o
         </div>
         <ResumePreview draft={draft} template={selectedTemplate} visible={previewVisible} />
       </div>
+      <PricingSection />
     </section>
   );
 }
