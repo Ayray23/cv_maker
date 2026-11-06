@@ -10,7 +10,8 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) return NextResponse.json({ error: "Sign in to delete cloud CVs." }, { status: 401 });
   const { id } = await params;
-  const { error } = await supabase.from("resumes").delete().eq("id", id).eq("owner_id", user.id);
+  const { data, error } = await supabase.from("resumes").delete().eq("id", id).eq("owner_id", user.id).select("id").maybeSingle();
   if (error) return NextResponse.json({ error: "Could not delete this CV." }, { status: 500 });
-  return NextResponse.json({ ok: true });
+  if (!data) return NextResponse.json({ error: "CV not found or you do not have permission to delete it." }, { status: 404 });
+  return NextResponse.json({ ok: true, id: data.id });
 }
