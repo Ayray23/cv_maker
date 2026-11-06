@@ -219,3 +219,30 @@ revoke all on function public.claim_free_download(uuid, uuid, text) from public,
 grant execute on function public.claim_free_download(uuid, uuid, text) to service_role;
 revoke all on function public.record_verified_paystack_payment(text, integer, text) from public, anon, authenticated;
 grant execute on function public.record_verified_paystack_payment(text, integer, text) to service_role;
+
+
+-- CVForge's Data API tables require explicit grants on new Supabase projects.
+grant usage on schema public to anon, authenticated, service_role;
+grant select on public.templates to anon, authenticated;
+grant select, insert, update, delete on public.resumes to authenticated;
+grant select, update on public.profiles to authenticated;
+grant select on public.resume_versions, public.payments, public.download_entitlements, public.download_events to authenticated;
+grant all privileges on all tables in schema public to service_role;
+
+-- Keep the database template catalogue aligned with the twelve templates in src/lib/cv.ts.
+insert into public.templates (id, display_name, tier, price_minor, config)
+values
+  ('classic', 'Classic', 'standard', 0, '{"layout":"traditional","accent":"navy"}'),
+  ('tech', 'Tech', 'standard', 0, '{"layout":"skills-led","accent":"blue"}'),
+  ('graduate', 'Graduate', 'standard', 0, '{"layout":"graduate","accent":"olive"}'),
+  ('modern', 'Modern', 'standard', 0, '{"layout":"modern","accent":"blue"}'),
+  ('executive', 'Executive', 'special', 200000, '{"layout":"executive","accent":"navy"}'),
+  ('creative', 'Creative', 'special', 200000, '{"layout":"creative","accent":"coral"}'),
+  ('timeline', 'Timeline', 'special', 200000, '{"layout":"timeline","accent":"teal"}'),
+  ('compact', 'Compact', 'special', 200000, '{"layout":"compact","accent":"charcoal"}')
+on conflict (id) do update set
+  display_name = excluded.display_name,
+  tier = excluded.tier,
+  price_minor = excluded.price_minor,
+  config = excluded.config,
+  active = true;
