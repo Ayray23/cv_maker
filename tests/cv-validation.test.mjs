@@ -160,3 +160,38 @@ test("accepts the updatedAt field emitted by the CV workspace during sync", () =
 
   assert.equal(resumeSyncSchema.safeParse({ resumes: [resume] }).success, true);
 });
+
+import { mergeCvDocuments } from "../src/lib/cv-sync.ts";
+
+test("keeps the newer offline draft when local and cloud CV IDs collide", () => {
+  const remote = {
+    id: "00000000-0000-4000-8000-000000000020",
+    title: "Cloud title",
+    templateId: "essential",
+    draft: validDraft,
+    updatedAt: "2026-11-06T10:00:00.000Z",
+  };
+  const local = {
+    ...remote,
+    title: "Offline title",
+    updatedAt: "2026-11-06T11:00:00.000Z",
+  };
+
+  assert.equal(mergeCvDocuments([remote], [local])[0].title, "Offline title");
+});
+
+test("uses the cloud CV when it is newer and keeps unrelated local CVs", () => {
+  const remote = {
+    id: "00000000-0000-4000-8000-000000000020",
+    title: "Cloud title",
+    templateId: "essential",
+    draft: validDraft,
+    updatedAt: "2026-11-06T11:00:00.000Z",
+  };
+  const localCopy = { ...remote, title: "Older offline title", updatedAt: "2026-11-06T10:00:00.000Z" };
+  const localOnly = { ...remote, id: "00000000-0000-4000-8000-000000000021", title: "Offline-only CV" };
+
+  const merged = mergeCvDocuments([remote], [localCopy, localOnly]);
+  assert.equal(merged.find((item) => item.id === remote.id)?.title, "Cloud title");
+  assert.equal(merged.some((item) => item.id === localOnly.id), true);
+});
