@@ -5,6 +5,7 @@ import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { initialCvDraft } from "@/lib/cv";
 
 export const runtime = "nodejs";
+const MAX_SYNC_BYTES = 2 * 1024 * 1024;
 
 export async function GET() {
   if (!isSupabaseConfigured()) return NextResponse.json({ error: "Cloud accounts are not configured." }, { status: 503 });
@@ -23,6 +24,8 @@ export async function PUT(request: Request) {
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) return NextResponse.json({ error: "Sign in to sync CVs." }, { status: 401 });
 
+  const contentLength = Number(request.headers.get("content-length") ?? 0);
+  if (contentLength > MAX_SYNC_BYTES) return NextResponse.json({ error: "This CV sync is too large. Reduce the amount of content and try again." }, { status: 413 });
   const body = await request.json().catch(() => null);
   const parsed = resumeSyncSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "CV data is invalid.", details: parsed.error.flatten() }, { status: 400 });
@@ -30,8 +33,8 @@ export async function PUT(request: Request) {
   const rows = parsed.data.resumes.map(({ id, title, templateId, draft }) => ({ id, owner_id: user.id, title, selected_template_id: templateId, content: draft }));
   if (rows.length === 0) return NextResponse.json({ ok: true });
   const { error } = await supabase.from("resumes").upsert(rows, { onConflict: "id" });
-  if (error) return NextResponse.json({ error: "Could not save your CVs." }, { status: 500 });
-  return NextResponse.json({ ok: true });
+  if (error) return NextResponse.json({ error: "Could not save your CVs. Check your connection and try again." }, { status: 500 });
+  return NextResponse.json({ ok: true, saved: rows.length });
 }
 
 export async function POST() {
