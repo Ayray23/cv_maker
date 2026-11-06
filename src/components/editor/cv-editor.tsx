@@ -17,21 +17,45 @@ export function CvEditor({ document, saveStatus, onDraftChange, onTitleChange, o
   async function handleDownload() {
     if (downloading) return;
     setNotice("");
-    if (selectedTemplate.special) {
-      setNotice("Premium PDF downloads will be available after Paystack is configured. You can still select, edit, and preview this template.");
-      return;
-    }
     setDownloading(true);
     try {
       const sync = await fetch("/api/resumes", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ resumes: [document] }) });
-      if (!sync.ok) throw new Error(sync.status === 401 || sync.status === 503 ? "Sign in and configure Supabase cloud storage before downloading." : "Save this CV before downloading.");
-      const response = await fetch("/api/downloads/pdf", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ resumeId: document.id }) });
-      if (response.status === 402) {
-        throw new Error("Your two free PDF downloads have been used. Additional downloads will be available after Paystack checkout is configured.");
+      if (!sync.ok) {
+        const result = await sync.json().catch(() => null) as { error?: string } | null;
+        throw new Error(result?.error || "Sign in and configure cloud storage before downloading.");
       }
-      if (!response.ok) { const result = await response.json() as { error?: string }; throw new Error(result.error || "PDF could not be generated."); }
-      const blob = await response.blob(); const href = URL.createObjectURL(blob); const link = window.document.createElement("a");
-      link.href = href; link.download = `${(document.title || "CV").replace(/[^a-z0-9_-]+/gi, "-")}.pdf`; link.click(); URL.revokeObjectURL(href);
+      const response = await fetch("/api/downloads/pdf", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ resumeId: document.id }) });
+      if (response.ok) {
+        const blob = await response.blob();
+        const href = URL.createObjectURL(blob);
+        const link = window.document.createElement("a");
+        link.href = href;
+        link.download = `${(document.title || "CV").replace(/[^a-z0-9_-]+/gi, "-")}.pdf`;
+        link.click();
+        URL.revokeObjectURL(href);
+        return;
+      }
+
+      const result = await response.json().catch(() => null) as { error?: string; paymentRequired?: boolean } | null;
+      if (response.status !== 402 || !result?.paymentRequired) {
+        throw new Error(result?.error || "PDF could not be generated.");
+      }
+
+      const checkout = await fetch("/api/payments/initialize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resumeId: document.id }),
+      });
+      const checkoutResult = await checkout.json().catch(() => null) as { error?: string; authorizationUrl?: string } | null;
+      if (!checkout.ok || !checkoutResult?.authorizationUrl) {
+        throw new Error(checkoutResult?.error || "Checkout could not be started.");
+      }
+
+      const authorizationUrl = new URL(checkoutResult.authorizationUrl);
+      if (authorizationUrl.protocol !== "https:" || authorizationUrl.hostname !== "checkout.paystack.com") {
+        throw new Error("Checkout returned an invalid payment address.");
+      }
+      window.location.assign(authorizationUrl);
     } catch (error) { setNotice(error instanceof Error ? error.message : "Download could not be completed."); }
     finally { setDownloading(false); }
   }
@@ -43,7 +67,7 @@ export function CvEditor({ document, saveStatus, onDraftChange, onTitleChange, o
         <div className={`form-column${previewVisible ? " mobile-form-hidden" : ""}`}>
           <TemplatePicker templates={cvTemplates} selectedId={selectedId} onSelect={(templateId) => { setSelectedId(templateId); onTemplateChange(templateId); }} />
           <CvDetailsForm draft={draft} onChange={onDraftChange} />
-          <div className="form-footer"><span className="edit-note"><Check size={13} /> Editing is always free</span><div className="footer-right"><button className="continue-button" onClick={handleDownload} disabled={downloading}><Download size={15} /><span>{downloading ? "Preparing PDF…" : selectedTemplate.special ? "Continue to checkout" : "Download PDF"}</span><ArrowRight size={16} /></button></div></div>
+          <div className="form-footer"><span className="edit-note"><Check size={13} /> Editing is always free</span><div className="footer-right"><button className="continue-button" onClick={handleDownload} disabled={downloading}><Download size={15} /><span>{downloading ? "Preparing PDF…" : "Download PDF"}</span><ArrowRight size={16} /></button></div></div>
           {notice && <div className="notice" role="status"><BadgeCheck size={16} /><span>{notice}</span><button onClick={() => setNotice("")} aria-label="Dismiss message">×</button></div>}
         </div>
         <ResumePreview draft={draft} template={selectedTemplate} visible={previewVisible} />

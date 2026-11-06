@@ -5,5 +5,9 @@ build/
 dist/
 .env*
 !.env.example
+!.env.e2e.example
 *.tsbuildinfo
 next-env.d.ts
+playwright-report/
+test-results/
+supabase/.temp/
