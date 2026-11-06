@@ -17,5 +17,5 @@ export default async function CloudEditorPage({ params }: { params: Promise<{ id
   if (error) throw new Error("Could not load this CV.");
   if (!data) notFound();
   const draft = normalizeCvDraft(data.content ?? initialCvDraft);
-  return <CvWorkspace initialDocument={{ id: data.id, title: data.title, draft, templateId: data.selected_template_id, updatedAt: data.updated_at }} />;
+  return <CvWorkspace ownerId={user.id} initialDocument={{ id: data.id, title: data.title, draft, templateId: data.selected_template_id, updatedAt: data.updated_at }} />;
 }
