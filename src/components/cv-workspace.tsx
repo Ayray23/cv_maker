@@ -1,17 +1,14 @@
 "use client";
-
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AppHeader } from "@/components/layout/app-header";
 import { WorkspaceSidebar } from "@/components/layout/workspace-sidebar";
 import { CvEditor } from "@/components/editor/cv-editor";
 import { CvDocument, initialCvDraft, normalizeCvDraft } from "@/lib/cv";
-
 const STORAGE_KEY = "cvforge.documents.v1";
-
 function newDocument(): CvDocument {
   return { id: crypto.randomUUID(), title: "Untitled CV", templateId: "essential", draft: { ...initialCvDraft }, updatedAt: new Date().toISOString() };
 }
-
+type CloudState = "checking" | "ready" | "signed-out" | "unconfigured" | "error";
 export function CvWorkspace({ initialDocument }: { initialDocument?: CvDocument }) {
   const [dark, setDark] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -20,13 +17,12 @@ export function CvWorkspace({ initialDocument }: { initialDocument?: CvDocument 
   const [loaded, setLoaded] = useState(Boolean(initialDocument));
   const [cloudReady, setCloudReady] = useState(Boolean(initialDocument));
   const [cloudEnabled, setCloudEnabled] = useState(Boolean(initialDocument));
-  const [saveStatus, setSaveStatus] = useState("Saved on this device");
-  // Serialize cloud writes so a slower, older autosave can never overwrite a newer draft.
+  const [cloudState, setCloudState] = useState<CloudState>(initialDocument ? "ready" : "checking");
+  const [saveStatus, setSaveStatus] = useState(initialDocument ? "Synced to your account" : "Saved on this device");
   const syncQueue = useRef<Promise<void>>(Promise.resolve());
   const saveRevision = useRef(0);
   const activeDocument = documents.find((document) => document.id === activeId) ?? documents[0];
   const initials = useMemo(() => (activeDocument?.draft.fullName ?? "").split(" ").map((part) => part[0]).slice(0, 2).join("").toUpperCase(), [activeDocument?.draft.fullName]);
-
   useEffect(() => {
     if (initialDocument) return;
     try {
@@ -40,108 +36,64 @@ export function CvWorkspace({ initialDocument }: { initialDocument?: CvDocument 
           setActiveId(parsed.documents.some((item) => item.id === parsed.activeId) ? parsed.activeId! : parsed.documents[0].id);
         }
       }
-    } catch {
-      setSaveStatus("Could not read saved drafts");
-    }
+    } catch { setSaveStatus("Could not read saved drafts"); }
     setLoaded(true);
-    fetch("/api/resumes")
-      .then(async (response) => {
-        if (response.status === 401 || response.status === 503) {
-          setCloudEnabled(false);
-          setCloudReady(true);
-          return;
-        }
-        if (!response.ok) throw new Error("Could not load cloud CVs.");
-        const payload = await response.json() as { resumes: Array<{ id: string; title: string; content: CvDocument["draft"]; selected_template_id: string; updated_at: string }> };
-        const remote = payload.resumes.map((row) => ({ id: row.id, title: row.title, draft: normalizeCvDraft(row.content), templateId: row.selected_template_id, updatedAt: row.updated_at }));
-        setDocuments((local) => {
-          const ids = new Set(remote.map((item) => item.id));
-          return [...remote, ...local.filter((item) => !ids.has(item.id))];
-        });
-        setCloudEnabled(true);
-        setCloudReady(true);
-      })
-      .catch(() => {
-        setSaveStatus("Cloud sync unavailable · saved locally");
-        setCloudEnabled(false);
-        setCloudReady(true);
-      });
+    fetch("/api/resumes").then(async (response) => {
+      if (response.status === 401) { setCloudEnabled(false); setCloudReady(true); setCloudState("signed-out"); return; }
+      if (response.status === 503) { setCloudEnabled(false); setCloudReady(true); setCloudState("unconfigured"); return; }
+      if (!response.ok) throw new Error("Could not load cloud CVs.");
+      const payload = await response.json() as { resumes: Array<{ id: string; title: string; content: CvDocument["draft"]; selected_template_id: string; updated_at: string }> };
+      const remote = payload.resumes.map((row) => ({ id: row.id, title: row.title, draft: normalizeCvDraft(row.content), templateId: row.selected_template_id, updatedAt: row.updated_at }));
+      setDocuments((local) => { const ids = new Set(remote.map((item) => item.id)); return [...remote, ...local.filter((item) => !ids.has(item.id))]; });
+      setCloudEnabled(true); setCloudReady(true); setCloudState("ready");
+    }).catch(() => { setSaveStatus("Cloud sync unavailable · saved locally"); setCloudEnabled(false); setCloudReady(true); setCloudState("error"); });
   }, [initialDocument]);
-
   useEffect(() => {
     if (!loaded || !cloudReady) return;
     const revision = ++saveRevision.current;
     const timer = window.setTimeout(() => {
-      try {
-        if (!initialDocument) localStorage.setItem(STORAGE_KEY, JSON.stringify({ documents, activeId }));
-      } catch {
-        setSaveStatus("Could not save on this device");
-        return;
-      }
-
-      if (!cloudEnabled) {
-        setSaveStatus("Saved on this device");
-        return;
-      }
-
+      try { if (!initialDocument) localStorage.setItem(STORAGE_KEY, JSON.stringify({ documents, activeId })); }
+      catch { setSaveStatus("Could not save on this device"); return; }
+      if (!cloudEnabled) { setSaveStatus("Saved on this device"); return; }
       setSaveStatus("Saving to your account…");
       const snapshot = JSON.stringify({ resumes: documents });
-      syncQueue.current = syncQueue.current
-        .catch(() => undefined)
-        .then(async () => {
-          const response = await fetch("/api/resumes", {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: snapshot,
-          });
-          if (!response.ok) throw new Error("Cloud sync failed");
-          if (saveRevision.current === revision) setSaveStatus("Synced to your account");
-        })
-        .catch(() => {
-          if (saveRevision.current === revision) setSaveStatus("Saved locally · cloud sync failed");
-        });
+      syncQueue.current = syncQueue.current.catch(() => undefined).then(async () => {
+        const response = await fetch("/api/resumes", { method: "PUT", headers: { "Content-Type": "application/json" }, body: snapshot });
+        if (!response.ok) throw new Error("Cloud sync failed");
+        if (saveRevision.current === revision) setSaveStatus("Synced to your account");
+      }).catch(() => {
+        if (saveRevision.current === revision) { setSaveStatus("Saved locally · cloud sync failed"); setCloudState("error"); }
+      });
     }, 400);
-    return () => {
-      window.clearTimeout(timer);
-      if (saveRevision.current === revision) saveRevision.current += 1;
-    };
+    return () => { window.clearTimeout(timer); if (saveRevision.current === revision) saveRevision.current += 1; };
   }, [documents, activeId, loaded, cloudReady, cloudEnabled, initialDocument]);
-
   function updateDraft(draft: CvDocument["draft"]) {
     setDocuments((current) => current.map((document) => document.id === activeDocument.id ? { ...document, draft, updatedAt: new Date().toISOString() } : document));
   }
-
   function createDocument() {
-    const document = newDocument();
-    setDocuments((current) => [document, ...current]);
-    setActiveId(document.id);
+    const document = newDocument(); setDocuments((current) => [document, ...current]); setActiveId(document.id);
   }
-
   function deleteDocument(id: string) {
     if (cloudEnabled) void fetch(`/api/resumes/${id}`, { method: "DELETE" });
-    if (documents.length === 1) {
-      const replacement = newDocument();
-      setDocuments([replacement]);
-      setActiveId(replacement.id);
-      return;
-    }
-    const next = documents.filter((document) => document.id !== id);
-    setDocuments(next);
-    if (id === activeId) setActiveId(next[0].id);
+    if (documents.length === 1) { const replacement = newDocument(); setDocuments([replacement]); setActiveId(replacement.id); return; }
+    const next = documents.filter((document) => document.id !== id); setDocuments(next); if (id === activeId) setActiveId(next[0].id);
   }
-
   function renameDocument(title: string) {
     setDocuments((current) => current.map((document) => document.id === activeDocument.id ? { ...document, title, updatedAt: new Date().toISOString() } : document));
   }
-
+  const cloudMessage = cloudState === "ready" ? "Cloud sync is connected. Your CVs are saved to your account."
+    : cloudState === "signed-out" ? "Sign in to turn on private cloud saving and PDF downloads."
+    : cloudState === "unconfigured" ? "Supabase is not configured yet. Add the project URL and publishable key to the app environment."
+    : cloudState === "error" ? "Cloud sync could not complete. Check the Supabase migrations and environment settings."
+    : "Checking your Supabase connection…";
   return (
     <main className={dark ? "app-shell dark-mode" : "app-shell"}>
       <AppHeader initials={initials} dark={dark} mobileOpen={mobileOpen} onToggleTheme={() => setDark(!dark)} onToggleNav={() => setMobileOpen(!mobileOpen)} />
+      <div className={`cloud-status-banner cloud-${cloudState}`} role="status"><span>{cloudMessage}</span>{cloudState === "signed-out" && <a href="/login?next=/">Sign in</a>}</div>
       <div className="workspace">
         <WorkspaceSidebar initials={initials} documents={documents} activeId={activeDocument.id} onSelect={setActiveId} onCreate={createDocument} onDelete={deleteDocument} />
         <CvEditor key={activeDocument.id} document={activeDocument} saveStatus={saveStatus} onDraftChange={updateDraft} onTitleChange={renameDocument} onTemplateChange={(templateId) => setDocuments((current) => current.map((document) => document.id === activeDocument.id ? { ...document, templateId } : document))} />
       </div>
-      <footer className="mobile-legal">Drafts are saved in this browser. Cloud accounts and paid checkout are not connected.</footer>
     </main>
   );
 }
