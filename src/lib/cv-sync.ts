@@ -1,4 +1,4 @@
-import type { CvDocument } from "@/lib/cv";
+import type { CvDocument } from "./cv";
 
 function timestamp(value: string | undefined): number {
   const parsed = value ? Date.parse(value) : Number.NaN;
