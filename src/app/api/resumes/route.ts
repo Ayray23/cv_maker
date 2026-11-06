@@ -15,7 +15,7 @@ export async function GET() {
 
   const { data, error } = await supabase.from("resumes").select("id,title,content,selected_template_id,updated_at").order("updated_at", { ascending: false });
   if (error) return NextResponse.json({ error: "Could not load your CVs." }, { status: 500 });
-  return NextResponse.json({ resumes: data });
+  return NextResponse.json({ userId: user.id, resumes: data });
 }
 
 export async function PUT(request: Request) {
@@ -23,6 +23,10 @@ export async function PUT(request: Request) {
   const supabase = await createClient();
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) return NextResponse.json({ error: "Sign in to sync CVs." }, { status: 401 });
+  const expectedOwnerId = request.headers.get("x-cvforge-owner-id");
+  if (expectedOwnerId && expectedOwnerId !== user.id) {
+    return NextResponse.json({ error: "The signed-in account changed. Reload before syncing." }, { status: 409 });
+  }
 
   const contentLength = Number(request.headers.get("content-length") ?? 0);
   if (contentLength > MAX_SYNC_BYTES) return NextResponse.json({ error: "This CV sync is too large. Reduce the amount of content and try again." }, { status: 413 });
