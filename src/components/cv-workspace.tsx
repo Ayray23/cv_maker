@@ -87,8 +87,9 @@ export function CvWorkspace({ initialDocument }: { initialDocument?: CvDocument 
           if (guest && response.status === 401 && !localStorage.getItem(GUEST_STORAGE_KEY)) {
             localStorage.setItem(GUEST_STORAGE_KEY, JSON.stringify(guest));
           }
-          setDocuments(guest?.documents?.length ? guest.documents : [newDocument()]);
-          setActiveId(guest?.activeId && guest.documents.some((item) => item.id === guest.activeId) ? guest.activeId : guest?.documents[0]?.id ?? "");
+          const guestDocuments = guest?.documents?.length ? guest.documents : [newDocument()];
+          setDocuments(guestDocuments);
+          setActiveId(guest?.activeId && guestDocuments.some((item) => item.id === guest.activeId) ? guest.activeId : guestDocuments[0].id);
           setCloudEnabled(false);
           setCloudReady(true);
           setCloudState(response.status === 401 ? "signed-out" : "unconfigured");
@@ -100,8 +101,9 @@ export function CvWorkspace({ initialDocument }: { initialDocument?: CvDocument 
         if (error instanceof Error && error.name === "AbortError") return;
         // Without a confirmed user ID, only restore guest data; never load an account cache.
         const guest = readWorkspaceCache(GUEST_STORAGE_KEY);
-        setDocuments(guest?.documents?.length ? guest.documents : [newDocument()]);
-        setActiveId(guest?.activeId && guest.documents.some((item) => item.id === guest.activeId) ? guest.activeId : guest?.documents[0]?.id ?? "");
+        const guestDocuments = guest?.documents?.length ? guest.documents : [newDocument()];
+        setDocuments(guestDocuments);
+        setActiveId(guest?.activeId && guestDocuments.some((item) => item.id === guest.activeId) ? guest.activeId : guestDocuments[0].id);
         setSaveStatus("Cloud sync unavailable · saved locally");
         setCloudEnabled(false);
         setCloudReady(true);
