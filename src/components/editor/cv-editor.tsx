@@ -16,16 +16,18 @@ export function CvEditor({ document, saveStatus, onDraftChange, onTitleChange, o
   const selectedTemplate = cvTemplates.find((template) => template.id === selectedId) ?? cvTemplates[0];
   async function handleDownload() {
     if (downloading) return;
-    setDownloading(true); setNotice("");
+    setNotice("");
+    if (selectedTemplate.special) {
+      setNotice("Premium PDF downloads will be available after Paystack is configured. You can still select, edit, and preview this template.");
+      return;
+    }
+    setDownloading(true);
     try {
       const sync = await fetch("/api/resumes", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ resumes: [document] }) });
       if (!sync.ok) throw new Error(sync.status === 401 || sync.status === 503 ? "Sign in and configure Supabase cloud storage before downloading." : "Save this CV before downloading.");
       const response = await fetch("/api/downloads/pdf", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ resumeId: document.id }) });
       if (response.status === 402) {
-        const checkout = await fetch("/api/payments/initialize", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ resumeId: document.id }) });
-        const checkoutResult = await checkout.json() as { error?: string; authorizationUrl?: string };
-        if (!checkout.ok || !checkoutResult.authorizationUrl) throw new Error(checkoutResult.error || "Checkout could not start.");
-        window.location.assign(checkoutResult.authorizationUrl); return;
+        throw new Error("Your two free PDF downloads have been used. Additional downloads will be available after Paystack checkout is configured.");
       }
       if (!response.ok) { const result = await response.json() as { error?: string }; throw new Error(result.error || "PDF could not be generated."); }
       const blob = await response.blob(); const href = URL.createObjectURL(blob); const link = window.document.createElement("a");
