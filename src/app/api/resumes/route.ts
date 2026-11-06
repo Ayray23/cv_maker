@@ -26,7 +26,10 @@ export async function PUT(request: Request) {
 
   const contentLength = Number(request.headers.get("content-length") ?? 0);
   if (contentLength > MAX_SYNC_BYTES) return NextResponse.json({ error: "This CV sync is too large. Reduce the amount of content and try again." }, { status: 413 });
-  const body = await request.json().catch(() => null);
+  const rawBody = await request.text();
+  if (Buffer.byteLength(rawBody, "utf8") > MAX_SYNC_BYTES) return NextResponse.json({ error: "This CV sync is too large. Reduce the amount of content and try again." }, { status: 413 });
+  let body: unknown = null;
+  try { body = JSON.parse(rawBody); } catch { /* Invalid JSON is handled by the schema response below. */ }
   const parsed = resumeSyncSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "CV data is invalid.", details: parsed.error.flatten() }, { status: 400 });
 
